@@ -1,0 +1,12 @@
+# SPACE for indentation
+# e.g.
+# service:
+#   Public:
+#       hostname: example.com
+#       IP: 93.184.216.34
+#       valid-port: 23,80-82
+#       block-port: 22
+#   Private:
+#       hostname: intern.example.com
+#       IP: 10.236.23.12
+#       valid-port: 22
