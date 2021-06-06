@@ -8,6 +8,7 @@ import subprocess
 
 CONFIG_FILE = 'checklist.yaml'
 DESCRIPTION = 'A script for health checking of machines'
+EPILOG = 'Check for DNS lookup, IP & host pinging, port status'
 TITLE = 'Diagnosis'
 
 # Class for perform a test on a network with hostname, IP, ports specified
@@ -18,18 +19,27 @@ class Network:
         self.sname = sname      # Service name
         self.hostname = self._get(info, 'hostname')
         self.IP = self._get(info, 'IP')
-        self.valid_port = filter(None, str(self._get(info, 'valid-port', '')).split(','))
-        self.block_port = filter(None, str(self._get(info, 'block-port', '')).split(','))
+        self.valid_port = set(self._getports(self._get(info, 'valid-port', '')))
+        self.block_port = set(self._getports(self._get(info, 'block-port', '')))
         if self.IP is None:
             self._err(f'Please specify IP address')
             raise
         self.success = True
+        self.valid_err = [] # int
+        self.block_err = [] # int
 
     # Test fully
-    def fulltest(self):
+    def fulltest(self, scan_popular=False):
         self.pingtest()
         self.portscan()
+        if scan_popular: 
+            self.scanpopular()
         self.dnstest()
+        self.valid_err.sort()
+        self.block_err.sort()
+        if self.valid_err: self._err(f'{self.IP} port closed: {", ".join(map(str, self.valid_err))}')
+        if self.block_err: self._err(f'{self.IP} port open: {", ".join(map(str, self.block_err))}')
+        if self.success: self._win(f'{self.IP} is healthy')
         return self.success
 
     # Try to ping the hostname and the IP 
@@ -61,6 +71,15 @@ class Network:
             self._err(f'IP of DNS query mismatch ({resolvedIP} != {self.IP})')
         return self.success
 
+    # Scan the most popular 1000 ports
+    def scanpopular(self):
+        portscanner = Network.portscanner
+        res = portscanner.scan(self.IP, arguments='')
+        for port, info in res['scan'][self.IP]['tcp'].items():
+            if info['state'] == 'open' and port not in self.valid_port and port not in self.block_port:
+                self.block_err.append(port)
+
+
     # Ping by "ping -c 1 {target}" and return True if the target responds
     def _pingtest(self, target):
         proc = subprocess.Popen(['ping', '-c', '1', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -70,14 +89,25 @@ class Network:
     # Scan by "nmap -p {port} {IP}"
     def _portscan(self, portsList, stat):
         portscanner = Network.portscanner
+        # portsList = self._getports(portsList)
+        for port in portsList:
+            res = portscanner.scan(self.IP, arguments=f'-p {port}')  # nmap -p {port} {IP}
+            res = True if res['scan'][self.IP]['tcp'][port]['state'] == 'open' else False
+            if res is not stat:
+                # self._err(f"Port {port} of {self.IP} is {'open' if res else 'closed'}")
+                if stat: self.valid_err.append(port)
+                else: self.block_err.append(port)
+
+    # Str to list (e.g. "2,3-5,9,10" --> [2, 3, 4, 5, 9, 10])
+    def _getports(self, portsList):
+        portsList = filter(None, str(portsList).split(','))
+        res = []
         for ports in portsList:
             ports = ports.split('-')
             ports.append(ports[0])
             for port in range(int(ports[0]), int(ports[1]) + 1):
-                res = portscanner.scan(self.IP, arguments=f'-p {port}')  # nmap -p {port} {IP}
-                res = True if res['scan'][self.IP]['tcp'][port]['state'] == 'open' else False
-                if res is not stat:
-                    self._err(f"Port {port} of {self.IP} is {'open' if res else 'closed'}")
+                res.append(port)
+        return res
 
 
     def _get(self, d, key, default=None):
@@ -86,8 +116,12 @@ class Network:
     # Print error message
     def _err(self, message):
         prefix = f'{self.sname}:'.ljust((len(self.sname) + 9) // 8 * 8)
-        print(f'{prefix}{message}')
+        print(f'\u2718 {prefix}{message}')
         self.success = False
+    
+    def _win(self, message):
+        prefix = f'{self.sname}:'.ljust((len(self.sname) + 9) // 8 * 8)
+        print(f'\u2714 {prefix}{message}')
 
 # Just a service with some networks
 class Service:
@@ -96,17 +130,12 @@ class Service:
         self.public = Network(name, info['Public']) if info.get('Public') is not None else None
         self.private = Network(name, info['Private']) if info.get('Private') is not None else None
 
-    def test(self):
-        if self.public is not None: self.public.fulltest()
-        if self.private is not None: self.private.fulltest()
+    def test(self, scan_popular=False):
+        if self.public is not None: self.public.fulltest(scan_popular=scan_popular)
+        if self.private is not None: self.private.fulltest(scan_popular=scan_popular)
         return self.public.success and self.private.success
 
-def boxing(text: str):
-    text = ' ' + text + ' '
-    print('\u2554' + '\u2550' * len(text) + '\u2557')
-    print('\u2551' + text + '\u2551')
-    print('\u255a' + '\u2550' * len(text) + '\u255d')
-
+# Print text in a box
 def boxing(text: str):
     text = ' ' + text + ' '
     print('\u256d' + '\u2500' * len(text) + '\u256e')
@@ -115,18 +144,25 @@ def boxing(text: str):
 
 if __name__ == '__main__':
     # Load the arguments
-    argparser = argparse.ArgumentParser(description=DESCRIPTION)
+    argparser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
     argparser.add_argument('-f', metavar='FILE', action='store', default=CONFIG_FILE, type=str, help=f'specify path of config file (default: {CONFIG_FILE})')
+    argparser.add_argument('--service', metavar='s1,s2,...', action='store', help=f'check specific services in the config')
+    argparser.add_argument('--scan-popular', action='store_true', help=f'also scan the most popular 1000 ports')
     args = argparser.parse_args()
     CONFIG_FILE = args.f
 
     # Load config
     with open(CONFIG_FILE, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-
-    # Testing
-    services = [ Service(key, info) for key, info in config.items() ]
+    
+    # Print title
     boxing(TITLE)
+
+    # Get services (check only specific services if mention in --service)
+    services = [] if config is None else [ Service(key, info) for key, info in config.items() ]
+    if args.service:
+        services = [ Service(key, config[key]) for key in args.service.split(',') if key ]
+    
+    # Testing
     for idx, service in enumerate(services):
-        if not service.test():
-            print('\u2500' * (len(TITLE) + 4))
+        service.test(args.scan_popular)
