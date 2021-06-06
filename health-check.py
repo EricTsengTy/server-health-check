@@ -60,7 +60,7 @@ class Network:
     def dnstest(self):
         resolver = Network.resolver
         try:
-            res = resolver.query(self.hostname)
+            res = resolver.resolve(self.hostname)
         except dns.resolver.NXDOMAIN:
             self._err(f'The DNS query name does not exist: {self.hostname}')
             return self.success
