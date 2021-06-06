@@ -1,6 +1,7 @@
 # Server Health Check
 ## Install
 ```shell
+## Install required packages
 $ pip3 install -r requirements.txt
 ```
 
