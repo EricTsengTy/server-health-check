@@ -75,6 +75,8 @@ class Network:
     def scanpopular(self):
         portscanner = Network.portscanner
         res = portscanner.scan(self.IP, arguments='')
+        if self.IP not in res['scan']: 
+            return
         for port, info in res['scan'][self.IP]['tcp'].items():
             if info['state'] == 'open' and port not in self.valid_port and port not in self.block_port:
                 self.block_err.append(port)
@@ -92,6 +94,8 @@ class Network:
         # portsList = self._getports(portsList)
         for port in portsList:
             res = portscanner.scan(self.IP, arguments=f'-p {port}')  # nmap -p {port} {IP}
+            if self.IP not in res['scan']:                           # Host might be down    
+                continue                  
             res = True if res['scan'][self.IP]['tcp'][port]['state'] == 'open' else False
             if res is not stat:
                 # self._err(f"Port {port} of {self.IP} is {'open' if res else 'closed'}")
