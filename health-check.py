@@ -137,7 +137,8 @@ class Service:
     def test(self, scan_popular=False):
         if self.public is not None: self.public.fulltest(scan_popular=scan_popular)
         if self.private is not None: self.private.fulltest(scan_popular=scan_popular)
-        return self.public.success and self.private.success
+        return (self.public is None or self.public.success) \
+                and (self.private is None or self.private.success)
 
 # Print text in a box
 def boxing(text: str):
