@@ -22,7 +22,7 @@ $ ./health-check.py --service=mailserver --scan-popular
 ```
 
 ## Configure example
-```vim
+```yaml
 webserver:
     Public:
         hostname: web1.example.com
