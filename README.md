@@ -21,7 +21,7 @@ $ ./health-check.py -f mylist.yaml --service=webserver,dnsserver
 $ ./health-check.py --service=mailserver --scan-popular
 ```
 
-## Configure example
+## Example config
 ```yaml
 webserver:
     Public:
