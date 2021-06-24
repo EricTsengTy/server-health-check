@@ -14,6 +14,18 @@ $ pip3 install -r requirements.txt
 ## Help message
 $ ./health-check.py -h
 
+usage: health-check.py [-h] [-f FILE] [--service s1,s2,...] [--scan-popular]
+
+A script for health checking of machines
+
+optional arguments:
+  -h, --help           show this help message and exit
+  -f FILE              specify path of config file (default: checklist.yaml)
+  --service s1,s2,...  check specific services in the config
+  --scan-popular       also scan the most popular 1000 ports
+
+Check for DNS lookup, IP & host pinging, port status
+
 ## Scan specific services with a config specified
 $ ./health-check.py -f mylist.yaml --service=webserver,dnsserver
 
